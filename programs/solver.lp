@@ -1,83 +1,64 @@
-cell(1..W, 1..H, 1..D) :- width(W), height(H), depth(D).
+% solver.lp
+% 3D Symbolic Region Puzzle - Solver
+% Authors: Abdelouahad Alla & Odan Lafrance
 
-% We choose, for each block, a position for its first unit cube.
-{ block_pos(X, Y, Z, B, 1) : cell(X, Y, Z) } = 1 :- block(B).
+% Input specifications (provided by the puzzle instance):
+% cube(X,Y,Z) : represents a cell of the non-planar polycube board.
+% symbol(X,Y,Z, S) : indicates a symbol of type S at cell (X,Y,Z).
+% wall(X,Y,Z, X',Y',Z') : represents a wall between two face-adjacent cubes.
+% regions(M) : the required number of regions.
+% symbol_type(S) : the types of symbols (1..K).
 
-% We choose, for each block, a rotation for each axis.
-{ rot(Axis, B, R) : rot(R) } = 1 :- block(B), Axis = (x; y; z).
+% Ensure walls are treated symmetrically
+u_wall(X,Y,Z, X',Y',Z') :- wall(X,Y,Z, X',Y',Z').
+u_wall(X',Y',Z', X,Y,Z) :- wall(X,Y,Z, X',Y',Z').
 
-% Defines the 4 possible rotations on a axis.
-rot((0; 90; 180; 270)).
+% -------------------------------------------------------------
+% Rule 1: Coverage
+% Every cube is assigned to exactly one region 1..M
+1 { region(X,Y,Z, R) : R = 1..M } 1 :- cube(X,Y,Z), regions(M).
 
-% Defines the different directions from a cell to its neighbors.
-dir(a,  0,  1,  0).
-dir(b,  0, -1,  0).
-dir(n,  0,  0,  1).
-dir(s,  0,  0, -1).
-dir(e,  1,  0,  0).
-dir(w, -1,  0,  0).
+% -------------------------------------------------------------
+% Rule 2: Connectivity
+% Cubes are topologically face-adjacent if they differ by 1 in exactly one coordinate
+adj_board(X,Y,Z, X',Y',Z') :- cube(X,Y,Z), cube(X',Y',Z'), |X-X'| + |Y-Y'| + |Z-Z'| == 1.
 
-% Gives the opposite direction Dir2 of a direction Dir1.
-dir_opposite(Dir1, Dir2) :- rot_dir(Dir1, 180, _, Dir2), Dir1 != Dir2.
+% Two adjacent cubes are connected if there is no wall between them
+adj(X,Y,Z, X',Y',Z') :- adj_board(X,Y,Z, X',Y',Z'), not u_wall(X,Y,Z, X',Y',Z').
 
-% rot_dir(Dir, R, Axis, Dir') defines the rotation of a direction Dir by an angle R on the axis Axis.
-rot_dir(Dir, R, x, Dir) :- Dir = (e; w), rot(R).
-rot_dir(Dir, R, y, Dir) :- Dir = (a; b), rot(R).
-rot_dir(Dir, R, z, Dir) :- Dir = (n; s), rot(R).
+% Adjacency within the same region
+adj_region(X,Y,Z, X',Y',Z') :- adj(X,Y,Z, X',Y',Z'), region(X,Y,Z, R), region(X',Y',Z', R).
 
-rot_dir(a, 90, x, s).
-rot_dir(s, 90, x, b).
-rot_dir(b, 90, x, n).
-rot_dir(n, 90, x, a).
+% Define the root of each region (lexicographically smallest coordinate in the region)
+root(X,Y,Z, R) :- region(X,Y,Z, R), 
+                  not region(X',Y',Z', R) : cube(X',Y',Z'), (X',Y',Z') < (X,Y,Z).
 
-rot_dir(n, 90, y, e).
-rot_dir(e, 90, y, s).
-rot_dir(s, 90, y, w).
-rot_dir(w, 90, y, n).
+% Reachability from the root within the region
+reachable(X,Y,Z, R) :- root(X,Y,Z, R).
+reachable(X',Y',Z', R) :- reachable(X,Y,Z, R), adj_region(X,Y,Z, X',Y',Z').
 
-rot_dir(a, 90, z, e).
-rot_dir(e, 90, z, b).
-rot_dir(b, 90, z, w).
-rot_dir(w, 90, z, a).
+% Constraint: all cubes in a region must be reachable from its root
+:- region(X,Y,Z, R), not reachable(X,Y,Z, R).
 
-rot_dir(Dir1, 180, Axis, Dir3) :- rot_dir(Dir1, 90, Axis, Dir2), rot_dir(Dir2, 90, Axis, Dir3).
-rot_dir(Dir1, 270, Axis, Dir2) :- rot_dir(Dir2, 90, Axis, Dir1).
-rot_dir(Dir, 0, Axis, Dir) :- Dir=(a; b; n; e; s; w), Axis = (x; y; z).
+% -------------------------------------------------------------
+% Rule 3: Non-planarity
+% Each region must extend in all three spatial dimensions
+distinct_x(R, X) :- region(X,Y,Z, R).
+distinct_y(R, Y) :- region(X,Y,Z, R).
+distinct_z(R, Z) :- region(X,Y,Z, R).
 
-% We rotate each block in the three axes with the chosen rotations.
-rot_x(B, N1, N2, Dir') :- rot(x, B, R), rot_dir(Dir, R, x, Dir'), block(B, N1, N2, Dir).
-rot_y(B, N1, N2, Dir') :- rot(y, B, R), rot_dir(Dir, R, y, Dir'), rot_x(B, N1, N2, Dir).
-rot_block(B, N1, N2, Dir') :- rot(z, B, R), rot_dir(Dir, R, z, Dir'), rot_y(B, N1, N2, Dir).
+:- regions(M), R=1..M, #count { X : distinct_x(R, X) } < 2.
+:- regions(M), R=1..M, #count { Y : distinct_y(R, Y) } < 2.
+:- regions(M), R=1..M, #count { Z : distinct_z(R, Z) } < 2.
 
-% We rotate the pipe segments in the three axes using the same rotation as their corresponding block.
-pipe_rot_x(B, N, In', Out') :- rot(x, B, R), rot_dir(In, R, x, In'), rot_dir(Out, R, x, Out'), pipe(B, N, In, Out).
-pipe_rot_y(B, N, In', Out') :- rot(y, B, R), rot_dir(In, R, y, In'), rot_dir(Out, R, y, Out'), pipe_rot_x(B, N, In, Out).
-rot_pipe(B, N, In', Out') :- rot(z, B, R), rot_dir(In, R, z, In'), rot_dir(Out, R, z, Out'), pipe_rot_y(B, N, In, Out).
+% -------------------------------------------------------------
+% Rule 4: Symbol completeness
+% Each region contains exactly one symbol of each type.
+:- regions(M), R=1..M, symbol_type(S), #count { X,Y,Z : region(X,Y,Z, R), symbol(X,Y,Z, S) } != 1.
 
-% Computes the position of the unit cubes of each block that are not placed using the position of the already placed unit cubes.
-block_pos(X + DX, Y + DY, Z + DZ, B, N2) :- block_pos(X, Y, Z, B, N1), rot_block(B, N1, N2, Dir), dir(Dir, DX, DY, DZ).
+% -------------------------------------------------------------
+% Rule 5: Wall separation
+% For every wall, the separated cubes must belong to different regions.
+:- u_wall(X,Y,Z, X',Y',Z'), region(X,Y,Z, R), region(X',Y',Z', R).
 
-% Computes the position of the pipe segments using the position of its corresponding unit block.
-pipe_pos(X, Y, Z, In, Out) :- rot_pipe(B, N, In, Out), block_pos(X, Y, Z, B, N).
-
-% We make sure that the blocks are placed in the grid and not outside.
-:- block_pos(X, Y, Z, _, _), not cell(X, Y, Z).
-
-% We make sure that the blocks do mot overlap.
-:- block_pos(X, Y, Z, B1, _), block_pos(X, Y, Z, B2, _), B1 != B2.
-
-% Gives the adjacent cell (X2, Y2, Z2) of a cell (X, Y, Z) in a given direction Dir.
-adjacent_cell(X, Y, Z, X2, Y2, Z2, Dir) :- cell(X, Y, Z), dir(Dir, DX, DY, DZ), X2 = X + DX, Y2 = Y + DY, Z2 = Z + DZ.
-
-% Since pipe segments are not directional, we need to consider both directions.
-pipe_pos(X, Y, Z, Out, In) :- pipe_pos(X, Y, Z, In, Out).
-
-% We make sure that the pipe segments form a single continuous path.
-:- pipe_pos(X, Y, Z, _, Out), adjacent_cell(X, Y, Z, X2, Y2, Z2, Out), not pipe_pos(X2, Y2, Z2, In, _), dir_opposite(In, Out), not pipe_in(X, Y, Z, _), not pipe_out(X, Y, Z, _).
-
-% We make sure that the pipe's ends are at the right positions and going the right direction defined by the instances.
-:- pipe_in(X, Y, Z, In), not pipe_pos(X, Y, Z, In, _).
-:- pipe_out(X, Y, Z, Out), not pipe_pos(X, Y, Z, _, Out).
-
-#show block_pos/5.
-#show pipe_pos/5.
+#show region/4.
