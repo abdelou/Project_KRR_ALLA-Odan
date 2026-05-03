@@ -1,0 +1,176 @@
+\documentclass[a4paper,UKenglish,cleveref, autoref, thm-restate]{lipics-v2021}
+
+\title{Preliminary Report: 3D Symbolic Region Puzzle}
+\titlerunning{3D Symbolic Region Puzzle}
+
+\author{Odan Lafrance}{University of Mons (UMONS), Belgium}{Odan.Lafrance@student.umons.ac.be}{}{}
+\author{Abdelouahad Alla}{University of Mons (UMONS), Belgium}{Abdelouahad.ALLA@student.umons.ac.be}{}{}
+
+\authorrunning{O. Lafrance and A. Alla}
+
+\Copyright{Odan Lafrance and Abdelouahad Alla}
+
+\hideLIPIcs
+
+\begin{CCSXML}
+<ccs2012>
+<concept>
+<concept_id>10010147.10010178.10010187.10010198</concept_id>
+<concept_desc>Computing methodologies~Reasoning about belief and knowledge</concept_desc>
+<concept_significance>500</concept_significance>
+</concept>
+</ccs2012>
+\end{CCSXML}
+\ccsdesc[500]{Computing methodologies~Reasoning about belief and knowledge}
+\keywords{Answer Set Programming, 3D Puzzles, NP, Clingo, Regions, Symbols, Walls, Polycubes}
+
+\usepackage{tikz}
+\usetikzlibrary{matrix, positioning}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+We propose a three-dimensional logic puzzle called the \emph{3D Symbolic Region Puzzle} (3DSRP), inspired by Golomb's challenge on solid polyominoes. The puzzle is played on a free-form non-planar polycube board. The board must be partitioned into non-planar connected regions subject to two constraints: a \emph{symbolic} constraint requiring each region to contain exactly one symbol of each type, and a \emph{wall} constraint forbidding regions from crossing predefined barriers between adjacent cubes. The puzzle is physically constructible, visually verifiable from the outside using colored physical markers, and naturally parameterized by board size, number of regions, symbol types, and walls. We describe the formal problem definition and argue that the problem is in NP.
+\end{abstract}
+
+%% ------------------------------------------------------------
+\section{Introduction}
+\label{sec:intro}
+%% ------------------------------------------------------------
+
+Following Golomb's challenge and the project guidelines, we propose a 3D logic puzzle enriched with symbolic and structural constraints. A key originality of our puzzle is that the \emph{board itself is free-form}: rather than playing on a fixed rectangular box, the playing field is a non-planar polycube of an arbitrary shape, making each puzzle instance visually unique and genuinely three-dimensional.
+
+The puzzle is designed to be physically constructible and explicitly verifiable without requiring inspection of an opaque solid's interior. The puzzle instance consists of a pre-built 3D shape where walls are thin physical barriers placed between adjacent cubes, and symbols are engraved on exterior faces. To intuitively solve it in the real world, the player marks regions by attaching colored tiles (or using colored markers) on the exposed faces of the cubes ($m$ colors for $m$ regions). The solution is thus entirely visually verifiable from the outside.
+
+%% ------------------------------------------------------------
+\section{Puzzle Definition}
+\label{sec:puzzle}
+%% ------------------------------------------------------------
+
+\subsection{The Board}
+
+The playing field is a connected non-planar polycube $B$ of exactly $c$ unit cubes, embedded within a bounding box of side $N$. To guarantee that the human eye can verify the solution physically, the board satisfies three geometric properties:
+
+\begin{itemize}
+    \item \textbf{Connectivity:} Any two cubes of $B$ are connected by a path of face-adjacent cubes entirely within $B$.
+
+    \item \textbf{Non-planarity:} The cubes of $B$ do not all lie within a single plane. The $x,y,z$ coordinates of cubes in $B$ must each contain at least three distinct values.
+    
+    \item \textbf{Full Visibility:} No cube in $B$ is entirely hidden within the solid. Every cube must have at least one face exposed on the exterior boundary of the polycube.
+\end{itemize}
+
+The board is part of the puzzle instance. The parameters $c$ and $N$ control the puzzle scale and serve as the primary parameters for complexity analysis.
+
+\subsection{Symbols and Walls}
+
+A puzzle instance additionally specifies two types of clues, both visible on the physical object:
+
+\begin{itemize}
+    \item \textbf{Symbols:} A subset of cubes in $B$ each carry one symbol from a fixed alphabet $\Sigma = \{\sigma_1, \sigma_2, \dots, \sigma_k\}$ of $k$ distinct types. Each cube carries at most one symbol on its exterior faces.
+
+    \item \textbf{Walls:} A set $W$ of walls, each placed between two face-adjacent cubes of $B$, physically separating them. A wall between cubes $u$ and $v$ means that $u$ and $v$ cannot belong to the same region.
+\end{itemize}
+
+\subsection{Regions and Rules}
+
+A valid solution is a partition of $B$ into exactly $m$ regions satisfying the following five rules:
+
+\begin{enumerate}
+    \item \textbf{Coverage:} Every cube of $B$ belongs to exactly one region. No cube is left unassigned.
+
+    \item \textbf{Connectivity:} Each region is a connected set of cubes. For any two cubes in the same region, there exists a path between them passing only through cubes of the same region without crossing any wall.
+
+    \item \textbf{Non-planarity:} Each region is non-planar: its cubes must extend in all three spatial dimensions simultaneously. Formally, the $x,y,z$ coordinates of the cubes in each region must each contain at least two distinct values. This ensures every region is a truly three-dimensional solid that cannot be flattened.
+
+    \item \textbf{Symbol completeness:} Each region contains exactly one cube carrying each symbol type $\sigma_1, \dots, \sigma_k$. No symbol type appears more than once in a region, and no symbol type is absent from any region.
+
+    \item \textbf{Wall separation:} For every wall between cubes $u$ and $v$, the cubes $u$ and $v$ belong to different regions.
+\end{enumerate}
+
+\subsection{Feasibility and Extensibility}
+
+A necessary condition for a solution to exist is: $$m \times k \leq c$$ where $m$ is the number of regions, $k$ is the number of symbol types, and $c = |B|$ is the board size. If this condition is violated, no valid partition exists.
+
+The puzzle is naturally extensible: increasing $c$ or $N$ yields larger boards, increasing $m$ or $k$ adds more regions and symbol types, and increasing $|W|$ adds more separation constraints. This gives a rich family of instances of varying difficulty, suitable for experimental complexity analysis.
+
+\subsection{Formal Problem Statement}
+
+\begin{definition}[3D Symbolic Region Puzzle (3DSRP)]
+\textbf{Instance:} A tuple $(B, m, \Sigma, \mathit{sym}, W)$ where:
+\begin{itemize}
+    \item $B$ is a connected non-planar polycube board of $c$ unit cubes with full visibility, embedded within a bounding box of side $N$.
+    \item $m \geq 1$ is the number of regions.
+    \item $\Sigma = \{\sigma_1, \dots, \sigma_k\}$ is a finite set of symbol types with $m \times k \leq c$.
+    \item $\mathit{sym}$ assigns at most one symbol type to each cell of $B$.
+    \item $W$ is a set of walls, each between two face-adjacent cubes of $B$.
+\end{itemize}
+\textbf{Question:} Does there exist a partition of $B$ into exactly $m$ non-planar connected regions such that each region contains exactly one cube of each symbol type in $\Sigma$, and no region contains both endpoints of any wall in $W$?
+\end{definition}
+
+%% ------------------------------------------------------------
+\section{Methodology and Initial Plans}
+\label{sec:method}
+%% ------------------------------------------------------------
+
+We plan to implement the 3DSRP in Clingo using a two-program architecture. A \textbf{map generator} randomly produces puzzle instances by growing a connected non-planar board, then placing symbols and walls. A \textbf{solver} takes a puzzle instance as input and searches for a valid partition satisfying all five rules. Both programs will be parameterized by $c$, $N$, $m$, $k$, and $|W|$.
+
+We will measure execution time and grounded program size as functions of these parameters, generating instances for increasing values of $c$ and $N$. We hypothesize exponential growth in solving time consistent with NP membership. Results will be presented in tabular and graphical formats.
+
+%% ------------------------------------------------------------
+\section{Execution Example}
+\label{sec:example}
+%% ------------------------------------------------------------
+
+To demonstrate the feasibility of our Clingo implementation and to provide a visually verifiable instance (addressing the usability objectives), we successfully generated and solved a minimal $2 \times 2 \times 2$ puzzle ($c=8, N=2, m=2, k=2, |W|=2$).
+
+The solver correctly partitions the polycube into a green region and a blue region, taking all the constraints into account. As illustrated in Figure \ref{fig:3dsrp_example}, the visual representation confirms that both regions satisfy the spatial non-planarity constraint (extending across layers $Z=0$ and $Z=1$), adhere to the wall barriers, and encapsulate exactly one of each symbol without violation.
+
+\begin{figure}[htbp]
+    \centering
+    \includegraphics[width=\textwidth]{result.png}
+    \caption{Example of a solved 3D Symbolic Region Puzzle instance ($2\times 2 \times 2$). The board is partitioned into two 3D non-planar regions (blue and green). Each region contains exactly one symbol of type 1 and type 2. Red banners indicate physical walls placed between the bottom and top layers.}
+    \label{fig:3dsrp_example}
+\end{figure}
+
+%% ------------------------------------------------------------
+\section{Complexity Analysis}
+\label{sec:complexity}
+%% ------------------------------------------------------------
+
+\subsection{Formal Decision Problem}
+
+\begin{quote}
+\emph{Given a board $B$, parameters $m$ and $k$, a symbol assignment, and a wall set $W$, does a valid solution to the 3DSRP instance exist?}
+\end{quote}
+
+\subsection{Membership in NP}
+
+The 3DSRP is in \textbf{NP}. Given a proposed partition into $m$ regions, a verifier checks validity through the following steps, each running in polynomial time and verifiable by the human eye on the physical puzzle:
+
+\begin{enumerate}
+    \item \textbf{Coverage check:} Verify that every cube belongs to exactly one region. Takes $\mathcal{O}(c)$ time and is visually immediate on the physical object by checking if every exterior face holds a colored marker associated with a region.
+
+    \item \textbf{Connectivity check:} For each region, perform a breadth-first search without crossing walls to verify all its cubes are reachable from one another. Takes $\mathcal{O}(c)$ time total and can be physically verified by tracing connected cubes of the same color.
+
+    \item \textbf{Non-planarity check:} For each region, verify that its cubes do not all share the same $x,y,z$ coordinate. A region is planar if all its cubes have the same value on one axis, this is immediately visible on the physical puzzle since a flat region cannot stand up in three directions. Takes $\mathcal{O}(c)$ time.
+
+    \item \textbf{Symbol completeness check:} Count the occurrences of each symbol type in each region. Takes $\mathcal{O}(c)$ time. Due to the board's full visibility property, all symbols are located on outer faces, making this check immediate by visual inspection.
+
+    \item \textbf{Wall separation check:} For each wall, verify the two adjacent cubes belong to different regions. Takes $\mathcal{O}(|W|)$ time. Walls are physically visible as barriers between cubes of different colors.
+\end{enumerate}
+
+The entire verification runs in $\mathcal{O}(c + |W|)$, confirming that 3DSRP is in NP.
+
+%% Bibliography
+\begin{thebibliography}{9}
+
+\bibitem{Golomb1994}
+Solomon W.\ Golomb.
+\newblock \emph{Polyominoes: Puzzles, Patterns, Problems, and Packings}.
+\newblock Princeton University Press, 2nd edition, 1994.
+
+\end{thebibliography}
+
+\end{document}
